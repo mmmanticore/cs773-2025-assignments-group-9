@@ -102,6 +102,7 @@ def readRGBImageAndConvertToGreyscalePixelArray(input_filename):
     pixel_array = []
 
     for row in rgb_image_rows:
+        
         pixel_row = []
         r = 0
         g = 0

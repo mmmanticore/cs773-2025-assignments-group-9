@@ -47,7 +47,10 @@ def computeSeparableConvolution2DOddNTapBorderZero(pixel_array, image_width, ima
         for x in range(image_width):
             if x >= kernel_offset and x < image_width - kernel_offset:
                 convolution = 0.0
-                for xx in range(-kernel_offset, kernel_offset+1):
+
+                for xx in range(-kernel_offset, kernel_offset+1):               
+                    if x + xx < 0 or x + xx >= len(pixel_array[y]):
+                        print(f"Out of bounds access at y={y}, x={x}, x+xx={x+xx}, row length={len(pixel_array[y])}")
                     convolution = convolution + kernelAlongX[kernel_offset+xx] * pixel_array[y][x+xx]
                 intermediate[y][x] = convolution
 

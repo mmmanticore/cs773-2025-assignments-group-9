@@ -33,13 +33,37 @@ import imageProcessing.convolve2D as IPConv2D
 
 
 
-def computeGaussianAveraging3x3(pixel_array, image_width, image_height):
+# def computeGaussianAveraging3x3(pixel_array, image_width, image_height):
 
-    # sigma is 3 pixels
-    smoothing_3tap = [0.27901, 0.44198, 0.27901]
+#     # sigma is 3 pixels
+#     smoothing_3tap = [0.27901, 0.44198, 0.27901]
 
-    averaged = IPConv2D.computeSeparableConvolution2DOddNTapBorderZero(pixel_array, image_width, image_height, smoothing_3tap)
+#     averaged = IPConv2D.computeSeparableConvolution2DOddNTapBorderZero(pixel_array, image_width, image_height, smoothing_3tap)
 
+#     return averaged
+
+def computeGaussianAveraging(pixel_array, image_width, image_height, kernel_size=3):
+    """
+    通用高斯平滑函数，支持 kernel_size=3, 5, 7 自动选择卷积核
+    """
+    if kernel_size == 3:
+        kernel = [0.27901, 0.44198, 0.27901]
+    elif kernel_size == 5:
+        kernel = [0.0625, 0.25, 0.375, 0.25, 0.0625]  # σ≈1.0
+    elif kernel_size == 7:
+        kernel = [0.006, 0.061, 0.242, 0.383, 0.242, 0.061, 0.006]  # σ≈1.5
+    elif kernel_size == 9:
+            kernel = [0.00098, 0.00876, 0.02698, 0.06476, 0.09678,
+                    0.06476, 0.02698, 0.00876, 0.00098]  # σ≈2.0
+    else:
+        raise ValueError("Only support kernel_size = 3, 5, 7, or 9")
+
+
+    averaged = IPConv2D.computeSeparableConvolution2DOddNTapBorderZero(
+        pixel_array, image_width, image_height, kernel
+    )
     return averaged
+
+
 
 
