@@ -7,9 +7,9 @@ from A1P2 import get_15x15Matrix, Baoli_match
 def caculate_singleH(points):
     cp1 = np.array([cp1 for (cp1,cp2) in points])
     cp2 = np.array([cp2 for (cp1,cp2) in points])
-    #取匹配点cp1的每一个开头
+    # Take each beginning of the matching point cp1
     n=cp1.shape[0]
-    assert n>=4 #至少需要4个点来计算单应矩阵
+    assert n>=4 #At least 4 points are needed to calculate the homography matrix
     A=[]
     for i in range(n):
         x,y = cp1[i]
@@ -17,16 +17,16 @@ def caculate_singleH(points):
         A.append([x,y,1,0,0,0,-u*x,-u*y,-u])
         A.append([0,0,0,x,y,1,-v*x,-v*y,-v])
     A=np.array(A)
-    #对A进行SVD分解
+    #Perform SVD decomposition on A
     U,S,V=np.linalg.svd(A)
-    #取V的最后一列
+    #Take the last column of V
     H=V[-1].reshape(3,3)
-    #归一化
+    #normalization
     H=H/H[2,2]
     return H
 
 def randomlySelectFourDistinctMatches(matches):
-    #随机选择4个点
+    #Randomly select 4 points
     matches = np.asarray(matches)
 
     n=matches.shape[0]
@@ -35,8 +35,8 @@ def randomlySelectFourDistinctMatches(matches):
 
 
 def pointsAreCollinear(point1, point2, point3):
-    #判断三点是否共线
-    #三点共线判断公式area = (x2-x1)*(y3-y1) - (y2-y1)*(x3-x1)
+    #Determine whether three points are collinear
+    #Three points collinear judgment formula area = (x2-x1)*(y3-y1) - (y2-y1)*(x3-x1)
     x1,y1=point1
     x2,y2=point2
     x3,y3=point3
@@ -44,40 +44,40 @@ def pointsAreCollinear(point1, point2, point3):
 
 
 def mappingError(k, transformation):
-    #计算映射误差
+    #Calculate mapping error
     (x1, y1), (x2, y2) = k
-    #构造齐次坐标向量
+    #Constructing homogeneous coordinate vectors
     vec = np.array([x1, y1, 1.0])
-    #计算变换（投影）后的点（坐标）
+    #Calculate the point (coordinates) after transformation (projection)
     x1h, y1h, w1h = np.dot(transformation, vec)
     #x1h=x1',...
     x1h,y1h=x1h/w1h,y1h/w1h
-    #计算欧式距离的误差
+    #Error in calculating Euclidean distance
     return np.sqrt((x1h-x2)**2+(y1h-y2)**2)
 
-
+#codes from professor's ppt which we do the futher coding
 def ransac_singleH(matches,threshold=5,numberOfRandomDraws=1000):
     bestInlierCount=0
     bestTransformation= None
     for i in range(numberOfRandomDraws):
         seedGroup = randomlySelectFourDistinctMatches(matches)
-        # 只取每个 match 的前两个坐标
+        # Only take the first two coordinates of each match
         if pointsAreCollinear(seedGroup[0][1],seedGroup[1][1],seedGroup[2][1]):
             continue  # Skip if collinear
         transformation=caculate_singleH(seedGroup)
-        #用阈值筛选内点
+        #Using threshold to filter inliers
         inliers=[]
         for match in matches:
             map_err=mappingError(match,transformation)
             print(map_err)
             if map_err<0.5:
                 inliers.append(match)
-        #如果内点更多，就更新最优
+        #If there are more inliers, update the optimal
         if len(inliers)>bestInlierCount:
             bestInlierCount=len(inliers)
             bestTransformation=transformation
             bestInliers=inliers
-    #用全部最优内点跑DLT,得到finalTransformation
+    #Run DLT with all optimal interior points to get finalTransformation
     finalTransformation=caculate_singleH(bestInliers)
     return finalTransformation,bestInliers
 
@@ -85,7 +85,7 @@ def inverse_wrapping(H_final,
                      px_left, px_right,
                      wL, hL, wR, hR):
 
-    # 1) 先把右图四角映到左图坐标系
+    # First, project the four corners of the right image to the coordinate system of the left image.
     H_inv = np.linalg.inv(H_final)
     corners_R = np.array([
         [0,   0,   1],
@@ -94,17 +94,17 @@ def inverse_wrapping(H_final,
         [wR-1,hR-1,1]
     ]).T  # shape=(3,4)
     warped = H_inv @ corners_R           # shape=(3,4)
-    warped /= warped[2:3,:]              # 齐次归一
+    warped /= warped[2:3,:]             # Homogeneous Normalization
     xs = warped[0,:]
     ys = warped[1,:]
 
-    # 2) 同时考虑左图本身的范围 [0,wL)×[0,hL)
+    # At the same time, consider the range of the left image itself [0,wL)×[0,hL)
     all_x = np.hstack((xs, [0, wL-1]))
     all_y = np.hstack((ys, [0, hL-1]))
     min_x, max_x = np.floor(all_x.min()), np.ceil(all_x.max())
     min_y, max_y = np.floor(all_y.min()), np.ceil(all_y.max())
 
-    # 3) 新画布的宽高 + 左图放置偏移
+    # The width and height of the new canvas + the left image placement offset
     new_w = int(max_x - min_x + 1)
     new_h = int(max_y - min_y + 1)
     off_x = int(-min_x)
@@ -112,18 +112,18 @@ def inverse_wrapping(H_final,
 
     pano = np.zeros((new_h, new_w))
 
-    # 4) 把左图贴到 (off_x,off_y)
+    # Paste the left image to (off_x,off_y)
     pano[off_y:off_y+hL, off_x:off_x+wL] = px_left
 
-    # 5) 逆向采样：对新画布上所有像素，映到右图，采样
+    # Reverse sampling: For all pixels on the new canvas, map them to the right image and sample them
     for y in range(new_h):
         for x in range(new_w):
-            # 在左图坐标系里的点
+            # Points in the coordinate system of the left figure
             xm = x - off_x
             ym = y - off_y
             p = np.array([xm, ym, 1.0])
 
-            # 用 H_final（左→右）算到右图坐标
+            # Use H_final (left to right) to calculate the coordinates of the right image
             p2 = H_final @ p
             x2 = p2[0] / p2[2]
             y2 = p2[1] / p2[2]
@@ -140,39 +140,39 @@ def inverse_wrapping(H_final,
 
 
 def main():
-    # —— 从 A1P1 传入角点、灰度图等参数 ——
+    # Pass in corner points, grayscale images and other parameters from A1P1
     corners_left, corners_right, height_left, height_right, width_left, width_right, px_left, px_right = a1p1_main()
-    # —— 计算高斯滤波后的灰度图（同 A1P2） ——
+    # Calculate the grayscale image after Gaussian filtering (same as A1P2)
     px_left = jisuan_Gaosilvbo(width_left, height_left, px_left)
     px_right = jisuan_Gaosilvbo(width_right, height_right, px_right)
-    # **转成 numpy 数组**
+    # Convert to numpy array
     px_left = np.asarray(px_left)
     px_right = np.asarray(px_right)
-    # —— Phase 2：生成 15x15 描述子并暴力匹配 ——
+    # from Phase 2: Generate 15x15 descriptors and brute force match
     des_left = get_15x15Matrix(height_left, width_left, corners_left, px_left)
     des_right = get_15x15Matrix(height_right, width_right, corners_right, px_right)
-    matches = Baoli_match(des_left, des_right, ratio=0.9)#根据a1p2的返回值，返回的是一个三元组，包括了（x1,y1）,(x2,y2),score
-    #所以需要转换为（x1,y1,x2,y2）的形式
+    matches = Baoli_match(des_left, des_right, ratio=0.9)#According to the return value of a1p2, a triple is returned, including (x1, y1), (x2, y2), score
+    #So it needs to be converted into the form of (x1, y1, x2, y2)
     matches = [((x1, y1),(x2, y2)) for (x1, y1), (x2, y2), _ in matches]
 
     print(f"Phase 3: received {len(matches)} candidate matches from Phase 2.")
 
-    # —— RANSAC 估计单应矩阵 ——
+    #RANSAC estimates the homography matrix
     H_best, inlier_idxs = ransac_singleH(matches)
     print(f"RANSAC 找到 {len(inlier_idxs)} 个内点。")
-    # 提取左右图的 inlier 坐标列表
+    # Extract the inlier coordinate list of the left and right images
     left_inliers = np.array([pt1 for (pt1, pt2) in inlier_idxs])
     right_inliers = np.array([pt2 for (pt1, pt2) in inlier_idxs])
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
-    # 左图
+    # Left picture
     axes[0].imshow(px_left, cmap='gray')
     axes[0].scatter(left_inliers[:, 0], left_inliers[:, 1],
                     s=5, c='r', marker='o')
     axes[0].set_title("Left Image Inliers")
     axes[0].axis('off')
 
-    # 右图
+    # The right one
     axes[1].imshow(px_right, cmap='gray')
     axes[1].scatter(right_inliers[:, 0], right_inliers[:, 1],
                     s=5, c='r', marker='o')
@@ -181,14 +181,14 @@ def main():
 
     plt.tight_layout()
     plt.show()    #H_final,=ransac_singleH(matches)
-    # —— Warp and Stitch ——
+    #Warp and Stitch
     stitched = inverse_wrapping(
         H_best,
         px_left, px_right,
         width_left, height_left,
         width_right, height_right
     )
-    # —— 可视化拼接结果 ——
+    # visualize
     plt.figure(figsize=(10,5))
     plt.imshow(stitched, cmap='gray')
     plt.axis('off')
