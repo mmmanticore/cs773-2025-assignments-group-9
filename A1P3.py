@@ -160,8 +160,27 @@ def main():
     # —— RANSAC 估计单应矩阵 ——
     H_best, inlier_idxs = ransac_singleH(matches)
     print(f"RANSAC 找到 {len(inlier_idxs)} 个内点。")
+    # 提取左右图的 inlier 坐标列表
+    left_inliers = np.array([pt1 for (pt1, pt2) in inlier_idxs])
+    right_inliers = np.array([pt2 for (pt1, pt2) in inlier_idxs])
 
-    #H_final,=ransac_singleH(matches)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    # 左图
+    axes[0].imshow(px_left, cmap='gray')
+    axes[0].scatter(left_inliers[:, 0], left_inliers[:, 1],
+                    s=5, c='r', marker='o')
+    axes[0].set_title("Left Image Inliers")
+    axes[0].axis('off')
+
+    # 右图
+    axes[1].imshow(px_right, cmap='gray')
+    axes[1].scatter(right_inliers[:, 0], right_inliers[:, 1],
+                    s=5, c='r', marker='o')
+    axes[1].set_title("Right Image Inliers")
+    axes[1].axis('off')
+
+    plt.tight_layout()
+    plt.show()    #H_final,=ransac_singleH(matches)
     # —— Warp and Stitch ——
     stitched = inverse_wrapping(
         H_best,
