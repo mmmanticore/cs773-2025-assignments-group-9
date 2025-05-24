@@ -8,16 +8,16 @@ class DistortionRemover():
         self.fitter = LineFittingAlgorithm()
 
     def compute_undistorted_coordinates(self,k1,k2, xd, yd,image_width,image_height):
-        # 归一化坐标
+        # Normalized coordinates
         image_center_x = image_width / 2
         image_center_y = image_height / 2
-        # 归一化坐标
+
         xd = xd - image_center_x
         yd = yd - image_center_y
-        # 计算归一化半径
+        # Calculate the normalized radius
         r_2 = float(xd) ** 2 + float(yd) ** 2
         special=1+k1*r_2+k2*(r_2**2)
-        # 计算归一化畸变因子
+        # Calculate the normalized distortion factor
         #xu = xd(1+κ1ρ^2 + κ2ρ^4 + ...),
         #yu = yd(1 κ1p^2 + κ2ρ^4 + . . .)
         xu = float(xd) *special+image_center_x
@@ -61,7 +61,7 @@ class DistortionRemover():
         # But DO NOT delete them below!
         mse_list = []
         for distorted_points, mi, bi in zip(groups,best_slope_list,best_intercept_list):
-            # 点到直线 y=m x + b 的垂直距离的平方
+            # The square of the perpendicular distance from the point to the line y=m x + b
             mse = [((mi * x - y + bi) ** 2) / (mi * mi + 1) for (x, y) in distorted_points]
             mse_list.append(np.mean(mse))
 
@@ -69,7 +69,7 @@ class DistortionRemover():
         fade_mse=np.mean(mse_list)
         kappa_1 = 0.0
         history = []
-        #先搜索k1
+        #Search k1 first
         for i in range(200):
             k1 =  i * 1e-9
             undistorted_groups=[]
@@ -77,11 +77,11 @@ class DistortionRemover():
             for groupss in distorted_corner_groups:
                 undistorted=[self.compute_undistorted_coordinates(k1,0,xd,yd,width,height)for xd,yd in groupss]
                 undistorted_groups.append(undistorted)
-            #RANSAC拟合直线
+            #RANSAC fit line
             slope_list, intercept_list = line_fitting_alg.run(undistorted_groups)
-            #计算每条直线的mse
+            #Calculate the mse of each line
             mse_each_list=[]
-            #     # 原畸变点到拟合直线y=mx+b的垂直距离平方
+             # The square of the vertical distance from the original distortion point to the fitting line y=mx+b
             for origin_group, mi, bi in zip(undistorted_groups, slope_list, intercept_list):
                 mse_each = [((mi * x - y + bi)**2)/(mi**2+1) for (x,y) in origin_group]
                 mse_each_list.append(np.mean(mse_each))
@@ -89,14 +89,14 @@ class DistortionRemover():
 
             average=np.mean(mse_each_list)
             history.append((k1, average))
-            #判断最优记录
+            #Determine the best record
             if average < fade_mse:
                 fade_mse, kappa_1 = average, k1
             if fade_mse < 4:
                 break
         best_mse2 = fade_mse
         best_k2 = 0.0
-        #步骤2：固定k1，优化k2
+        #Step 2: Fix k1 and optimize k2
         for k2 in np.linspace(-1e-15, 1e-15, 101):
             undist2 = [
                 [self.compute_undistorted_coordinates(kappa_1, k2, xd, yd, width, height)
