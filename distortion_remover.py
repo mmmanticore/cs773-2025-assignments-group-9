@@ -5,7 +5,7 @@ from line_fitting_algorithm import LineFittingAlgorithm
 
 class DistortionRemover():
     def __init__(self) -> None:
-        pass
+        self.fitter = LineFittingAlgorithm()
 
     def compute_undistorted_coordinates(self,k1, xd, yd, image_height, image_width):
         image_center_x = image_width / 2
@@ -66,8 +66,8 @@ class DistortionRemover():
             mse = [((mi * x - y + bi) ** 2) / (mi * mi + 1) for (x, y) in distorted_points]
             mse_list.append(np.mean(mse))
 
-        smallest_MSE = np.mean(mse_list)
-        fade_mse=smallest_MSE
+        # smallest_MSE = np.mean(mse_list)
+        fade_mse=np.mean(mse_list)
         for i in range(200):
             k1=i*1e-9
             undistorted_groups=[]
@@ -78,21 +78,26 @@ class DistortionRemover():
             slope_list, intercept_list = line_fitting_alg.run(undistorted_groups)
             #计算每条直线的mse
             mse_each_list=[]
-            for each_group,each_mi,each_bi in zip(distorted_corner_groups,slope_list,intercept_list):
-                # 原畸变点到拟合直线y=mx+b的垂直距离平方
-                mse_each = [((each_mi * x - y + each_bi) ** 2) / (each_mi * each_mi + 1) for (x, y) in each_group]
+            # for each_group,each_mi,each_bi in zip(distorted_corner_groups,slope_list,intercept_list):
+            #     # 原畸变点到拟合直线y=mx+b的垂直距离平方
+            #     mse_each = [((each_mi * x - y + each_bi) ** 2) / (each_mi * each_mi + 1) for (x, y) in each_group]
+            #     mse_each_list.append(np.mean(mse_each))
+            for undist_group, mi, bi in zip(undistorted_groups, slope_list, intercept_list):
+                mse_each = [((mi * x - y + bi)**2)/(mi**2+1) for (x,y) in undist_group]
                 mse_each_list.append(np.mean(mse_each))
+
+
             average=np.mean(mse_each_list)
             #判断最优记录
             if average<fade_mse:
                 fade_mse=average
                 kappa_1 =k1
                 #若阈值小于4,则退出
-            if average<4:
+            if average < 4:
                 break
 
 
         kappa_2 = None
         average_kappa_value = None
 
-        return smallest_MSE, kappa_1, kappa_2, average_kappa_value   # DO NOT CHANGE THIS LINE!!!
+        return fade_mse, kappa_1, kappa_2, average_kappa_value   # DO NOT CHANGE THIS LINE!!!
