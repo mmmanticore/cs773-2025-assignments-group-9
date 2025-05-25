@@ -111,17 +111,7 @@ def run_distortion_removal(camera_name='H3', on_testing=False):
     ### Grouping Corners
     ############################################################
     group_corners_left_right = group_corners(corners)
-    groups=group_corners_left_right
-    # distortion_remover = DistortionRemover()
-    # distortion_remover.remove(group_corners_left_right,image_height,image_width)
-    #    这里 groups 是一个长度为 6 的列表，每个元素都是一条水平线对应的角点坐标列表
 
-    # 3. 对于每个组 groups[i]：
-    #    a. 用当前 κ1 计算所有 (xd,yd) → (xu,yu)
-    #    b. 对 (xu,yu) 用直线拟合算法计算拟合直线和残差
-    #    c. 把所有组的残差相加，作为当前 κ1 的目标函数值
-
-    # 4. 优化 κ1，重复 3 的过程，直到目标函数值最小
 
 
 
@@ -151,12 +141,94 @@ def run_distortion_removal(camera_name='H3', on_testing=False):
     distortion_remover = DistortionRemover()
     #distortion_remover.remove(undistorted_corners)
     print("111:",distortion_remover)
-    smallest_MSE, kappa_1, kappa_2, average_kappa_value = distortion_remover.remove(group_corners_left_right,image_height,image_width)
+    smallest_MSE, kappa_1, kappa_2, average_kappa_value = distortion_remover.remove(group_corners_left_right,image_width,image_height)
     print(f"Smallest MSE: {smallest_MSE}")
     print(f"kappa 1: {kappa_1}")
     print(f"kappa 2: {kappa_2}")
     print(f"Average kappa value: {average_kappa_value}")
     print("================================================\n\n\n\n")
+    # ——— 在原始灰度图上画红角点 + 黄直线 ———
+    # 1) 拟合直线所用的去畸变角点组
+
+    cx = corners['corner location x'].mean()
+
+    cy = corners['corner location y'].mean()
+    slopes, intercepts = distortion_remover.fitter.run(group_corners_left_right)
+
+    # 2) 绘图
+    fig, ax = plt.subplots(figsize=(8,6))
+    ax.imshow(distorted_px_array, cmap='gray')
+    ax.set_title("RANSAC Line Fitting (Original Distorted)")
+    ax.axis('off')
+
+    # 3) 红色：原始畸变角点
+    for _, row in corners.iterrows():
+        ax.plot(row['corner location x'],
+                row['corner location y'],
+                'ro', markersize=2)
+
+    # 4) 黄色实线：拟合直线 y = m x + b
+    xs = np.array([0, image_width])
+    for m, b in zip(slopes, intercepts):
+        ys = m*xs + b
+        ax.plot(xs, ys, color='yellow', linewidth=1)
+
+    plt.show()
+    # ——————————————————————————————
+    # ——— 新增：在一张图里对比红点／蓝点／黄线 ———
+    # 1) 先用最终 kappa_1 去畸变算出所有 undistorted_groups
+    undistorted_groups = [
+        [distortion_remover.compute_undistorted_coordinates(
+             kappa_1, xd, yd, image_width, image_height)
+         for xd, yd in group]
+        for group in group_corners_left_right
+    ]
+    # 2) 对这些去畸变点做一次 RANSAC 拟合，拿到 slopes, intercepts
+    slopes2, intercepts2 = distortion_remover.fitter.run(undistorted_groups)
+
+    # 3) 绘图
+    fig, ax = plt.subplots(figsize=(8,6))
+    ax.imshow(distorted_px_array, cmap='gray')
+    ax.set_title(f"Distorted (red) vs Undistorted (blue) Corners\nwith Fitted Lines (yellow), k1={kappa_1:.2e}")
+    ax.axis('off')
+
+    # 4) 红：原始畸变角点
+    for _, row in corners.iterrows():
+        ax.plot(row['corner location x'],
+                row['corner location y'],
+                'ro', markersize=2)
+
+    # 5) 蓝：去畸变后的角点
+    for grp in undistorted_groups:
+        for xu, yu in grp:
+            ax.plot(xu, yu, 'bo', markersize=2)
+
+    # 6) 黄线：用去畸变点拟合出的直线
+    xs = np.array([0, image_width])
+    for m, b in zip(slopes2, intercepts2):
+        ys = m * xs + b
+        ax.plot(xs, ys, color='yellow', linewidth=1)
+
+    plt.show()
+    # ——————————————————————————————
+    # 假设 distorted_color_image 是 H×W×3 的彩色图
+    # H, W = distorted_color_image.shape[:2]
+    # # 预分配映射表
+    # map_x = np.zeros((H, W), dtype=np.float32)
+    # map_y = np.zeros((H, W), dtype=np.float32)
+
+    undistorted_color = imageProcessing.A2_utilities.NearestNeighbourInterpolation(
+        distorted_color_image,
+        kappa_1
+    )
+    plt.figure(figsize=(8, 6))
+    plt.imshow(cv2.cvtColor(undistorted_color, cv2.COLOR_BGR2RGB))
+    plt.title(f"Undistorted Image (k1={kappa_1:.2e}, MSE={smallest_MSE:.2f})")
+    plt.axis('off')
+    plt.show()
+
+    # ===================== =======================z
+    return kappa_1
 
 
 
@@ -215,11 +287,14 @@ def run_camera_calibration(camera_type):
 
 
 
+
 def main():
-    run_distortion_removal('H3')
+
+    # k1=run_distortion_removal('H3')
 
     run_camera_calibration('H3')
-    run_camera_calibration('W3')
+    # run_camera_calibration('W3')
+
 
 
 if __name__ == '__main__':
