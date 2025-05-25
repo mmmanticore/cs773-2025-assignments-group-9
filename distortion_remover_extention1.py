@@ -113,5 +113,17 @@ class DistortionRemover():
                 best_mse2, best_k2 = mse2, k2
 
         kappa_2 = best_k2
+        final_groups = [
+            [self.compute_undistorted_coordinates(kappa_1, best_k2, xd, yd, width, height)
+             for xd, yd in grp]
+            for grp in groups
+        ]
+        slopes_f, inters_f = self.fitter.run(final_groups)
+        mses_f = []
+        for ug, m, b in zip(final_groups, slopes_f, inters_f):
+            errs = [((m * x - y + b) ** 2) / (m * m + 1) for x, y in ug]
+            mses_f.append(np.mean(errs))
+        final_mse = np.mean(mses_f)
+        fade_mse = final_mse
         average_kappa_value = None
         return fade_mse,kappa_1, kappa_2, average_kappa_value   # DO NOT CHANGE THIS LINE!!!
