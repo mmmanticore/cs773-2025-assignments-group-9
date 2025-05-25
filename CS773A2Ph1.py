@@ -61,7 +61,7 @@ def group_corners(corner_list):
         x = row['corner location x']
         y = row['corner location y']
         if x < x_axis_center_point:
-            # corner on the left-side of the chessboard 左侧棋盘的三条水平线分组
+            # corner on the left-side of the chessboard
             if 250 < y < 367:
                 left_corner_group_1.append([x, y])
             elif 368 < y < 478:
@@ -69,7 +69,7 @@ def group_corners(corner_list):
             elif 479 < y < 645:
                 left_corner_group_3.append([x, y])
         else:
-            # corner on the right-side of the chessboard  右侧棋盘的三条水平线分组
+            # corner on the right-side of the chessboard
             if 283 < y < 390:
                 right_corner_group_1.append([x, y])
             elif 391 < y < 516:
@@ -111,7 +111,9 @@ def run_distortion_removal(camera_name='H3', on_testing=False):
     ### Grouping Corners
     ############################################################
     group_corners_left_right = group_corners(corners)
-
+    # distortion_remover = DistortionRemover()
+    # distortion_remover.remove(group_corners_left_right,image_height,image_width)
+ 
 
 
 
@@ -139,83 +141,68 @@ def run_distortion_removal(camera_name='H3', on_testing=False):
     ### Removing Distortion
     ############################################################
     distortion_remover = DistortionRemover()
-    #distortion_remover.remove(undistorted_corners)
-    print("111:",distortion_remover)
     smallest_MSE, kappa_1, kappa_2, average_kappa_value = distortion_remover.remove(group_corners_left_right,image_width,image_height)
     print(f"Smallest MSE: {smallest_MSE}")
     print(f"kappa 1: {kappa_1}")
     print(f"kappa 2: {kappa_2}")
     print(f"Average kappa value: {average_kappa_value}")
     print("================================================\n\n\n\n")
-    # ——— 在原始灰度图上画红角点 + 黄直线 ———
-    # 1) 拟合直线所用的去畸变角点组
 
-    cx = corners['corner location x'].mean()
-
-    cy = corners['corner location y'].mean()
     slopes, intercepts = distortion_remover.fitter.run(group_corners_left_right)
 
-    # 2) 绘图
+    # Drawing
     fig, ax = plt.subplots(figsize=(8,6))
     ax.imshow(distorted_px_array, cmap='gray')
     ax.set_title("RANSAC Line Fitting (Original Distorted)")
     ax.axis('off')
 
-    # 3) 红色：原始畸变角点
+    # Red: Original distortion corner points
     for _, row in corners.iterrows():
         ax.plot(row['corner location x'],
                 row['corner location y'],
                 'ro', markersize=2)
 
-    # 4) 黄色实线：拟合直线 y = m x + b
+    # Solid yellow line: fitted line y = m x + b
     xs = np.array([0, image_width])
     for m, b in zip(slopes, intercepts):
         ys = m*xs + b
         ax.plot(xs, ys, color='yellow', linewidth=1)
 
     plt.show()
-    # ——————————————————————————————
-    # ——— 新增：在一张图里对比红点／蓝点／黄线 ———
-    # 1) 先用最终 kappa_1 去畸变算出所有 undistorted_groups
+    # First use the final kappa_1 to distort and calculate all undistorted_groups
     undistorted_groups = [
         [distortion_remover.compute_undistorted_coordinates(
              kappa_1, xd, yd, image_width, image_height)
          for xd, yd in group]
         for group in group_corners_left_right
     ]
-    # 2) 对这些去畸变点做一次 RANSAC 拟合，拿到 slopes, intercepts
+    # Perform a RANSAC fit on these dedistorted points to get slopes, intercepts
     slopes2, intercepts2 = distortion_remover.fitter.run(undistorted_groups)
 
-    # 3) 绘图
+    #drawing picture
     fig, ax = plt.subplots(figsize=(8,6))
     ax.imshow(distorted_px_array, cmap='gray')
     ax.set_title(f"Distorted (red) vs Undistorted (blue) Corners\nwith Fitted Lines (yellow), k1={kappa_1:.2e}")
     ax.axis('off')
 
-    # 4) 红：原始畸变角点
+    # Red: Original distortion corner points
     for _, row in corners.iterrows():
         ax.plot(row['corner location x'],
                 row['corner location y'],
                 'ro', markersize=2)
 
-    # 5) 蓝：去畸变后的角点
+    # Blue: Corner points after dedistortion
     for grp in undistorted_groups:
         for xu, yu in grp:
             ax.plot(xu, yu, 'bo', markersize=2)
 
-    # 6) 黄线：用去畸变点拟合出的直线
+    # Yellow line: straight line fitted by dedistortion points
     xs = np.array([0, image_width])
     for m, b in zip(slopes2, intercepts2):
         ys = m * xs + b
         ax.plot(xs, ys, color='yellow', linewidth=1)
 
     plt.show()
-    # ——————————————————————————————
-    # 假设 distorted_color_image 是 H×W×3 的彩色图
-    # H, W = distorted_color_image.shape[:2]
-    # # 预分配映射表
-    # map_x = np.zeros((H, W), dtype=np.float32)
-    # map_y = np.zeros((H, W), dtype=np.float32)
 
     undistorted_color = imageProcessing.A2_utilities.NearestNeighbourInterpolation(
         distorted_color_image,
@@ -229,7 +216,6 @@ def run_distortion_removal(camera_name='H3', on_testing=False):
 
     # ===================== =======================z
     return kappa_1
-
 
 
 def run_camera_calibration(camera_type):
@@ -290,10 +276,9 @@ def run_camera_calibration(camera_type):
 
 def main():
 
-    # k1=run_distortion_removal('H3')
-
+    run_distortion_removal('H3')
     run_camera_calibration('H3')
-    # run_camera_calibration('W3')
+    run_camera_calibration('W3')
 
 
 

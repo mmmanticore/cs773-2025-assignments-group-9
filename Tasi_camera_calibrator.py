@@ -11,12 +11,13 @@ class TsaiCameraCalibrator():
         ### You can put all your code for camera calibration here!!! ###
         ################################################################
 
+
         world_pts = corner_list[:, :3]    # X, Y, Z
         uv_prime  = corner_list[:, 3:5]   # u', v'
         us = uv_prime[:, 0]
         vs = uv_prime[:, 1]
 
-        # 2. 获取图像尺寸与像素参数
+        # Get image size and pixel parameters
         H, W = image.shape[:2]
         if camera_type == 'H3':
             dx = dy = 0.00155
@@ -29,12 +30,12 @@ class TsaiCameraCalibrator():
         print(f"[Step2] dx={dx}, dy={dy}, cx={cx}, cy={cy}, sx={sx}")
 
 
-        # 3. 感应面归一化坐标
+        # Normalized coordinates of sensing surface
         x_u = sx * dx * (us - cx)
         y_u =      dy * (cy - vs)
 
 
-        # 4. 构造线性系统 M a = b
+        # Construct the linear system Ma = b
         n = len(world_pts)
         M = np.zeros((n, 7))
         b = x_u.copy()
@@ -45,12 +46,12 @@ class TsaiCameraCalibrator():
         a1, a2, a3, a4, a5, a6, a7 = L
         print(f"[Step4] a1..a7= {a1:.6f},{a2:.6f},{a3:.6f},{a4:.6f},{a5:.6f},{a6:.6f},{a7:.6f}")
 
-        # 5. 计算 t_y 和 s_x
+        # Calculate t_y and s_x
         t_y = 1.0 / np.sqrt(a5*a5 + a6*a6 + a7*a7)
         s_x = abs(t_y) * np.linalg.norm([a1, a2, a3])
 
 
-        # 6. 构造并归一化旋转
+        # Construct and normalize the rotation
         r1 = np.array([a1, a2, a3]) * t_y
         r2 = np.array([a5, a6, a7]) * t_y
         r1 /= s_x
@@ -58,7 +59,7 @@ class TsaiCameraCalibrator():
         r3 = np.cross(r1, r2)
         # R = np.vstack((r1, r2, r3))
 
-        # 7. 最小二乘解 f 和 t_z
+        # Least squares solutions f and t_z
         A_ftz = []
         b_ftz = []
         for i, (X, Y, Z) in enumerate(world_pts):
@@ -70,7 +71,7 @@ class TsaiCameraCalibrator():
         b_ftz = np.array(b_ftz)
         f, t_z = np.linalg.lstsq(A_ftz, b_ftz, rcond=None)[0]
 
-        # 8. 单独最小二乘解 t_x
+        # Single least squares solution t_x
         A_tx = []
         b_tx = []
         for i, (X, Y, Z) in enumerate(world_pts):
@@ -80,8 +81,8 @@ class TsaiCameraCalibrator():
             b_tx.append(x_u[i] * (den + t_z) / f - num)
         t_x = float(np.linalg.lstsq(np.vstack(A_tx), np.array(b_tx), rcond=None)[0])
 
-        # —— Step5：判定 t_y 的符号 —— 
-        # us,vs, x_u,y_u, r1,r2,R, t_x,t_y, world_pts 都已算好
+        # Determine the sign of t_y
+        # us,vs, x_u,y_u, r1,r2,R, t_x,t_y, world_pts
         if f < 0:
             f = -f
         idx = np.argmax((us - cx)**2 + (vs - cy)**2)
@@ -90,7 +91,7 @@ class TsaiCameraCalibrator():
         y_new = r2.dot([X0, Y0, Z0]) + t_y
 
         if np.sign(x_new) != np.sign(x_u[idx]) or np.sign(y_new) != np.sign(y_u[idx]):
-            # 翻转 t_y 和 R 的行向量
+            # Flip the row vectors of t_y and R
             t_y = -t_y
             t_x = -t_x
             r1  = -r1
@@ -98,7 +99,7 @@ class TsaiCameraCalibrator():
             r3 = np.cross(r1, r2)
             R  = np.vstack((r1, r2, r3))
 
-        # 9. 构造内参矩阵 K
+        # Construct the internal parameter matrix K
         K = np.array([
             [sx * f / dx, 0.0,        cx],
             [0.0,         -f / dy,     cy],
@@ -106,14 +107,14 @@ class TsaiCameraCalibrator():
         ])
         print("[Step9] K=", K)
 
-        # 10. 投影 3D->2D
+        # Projection 3D->2D
         projected = []
         for (X, Y, Z) in world_pts:
             cam = R.dot([X, Y, Z]) + np.array([t_x, t_y, t_z])
             u_proj = (K[0,0] * cam[0] + K[0,2] * cam[2]) / cam[2]
             v_proj = (K[1,1] * cam[1] + K[1,2] * cam[2]) / cam[2]
             projected.append([u_proj, v_proj])
-        p = world_pts[idx]   # 用同一个 idx
+
 
         projected_2D_coordinates = np.array(projected)
 
@@ -146,54 +147,23 @@ class TsaiCameraCalibrator():
             't':np.array([t_x, t_y, t_z]),
         }
 
-        # 11. 打包返回
-        # required_parameters = {
-        #     'a1':a1,'a2':a2,'a3':a3,'a4':a4,
-        #     'a5':a5,'a6':a6,'a7':a7,
-        #     'f':f, 'R':R, 't':np.array([t_x, t_y, t_z]),
-        #     'Rt': Rt,
-        #     'K':K, 'dx':dx,'dy':dy,'cx':cx,'cy':cy,
-        #     'sx': s_x, 'tx': t_x, 'ty': t_y, 'tz': t_z,
-        # }
+        # Insert your projected 2D coordinates here!
+        # projected_2D_coordinates = None
         self._last_params = required_parameters
         self._last_projected = projected_2D_coordinates
-        return projected_2D_coordinates, required_parameters
-        
-        
-
-        # required_parameters = {
-        #     'a1': 0.0,
-        #     'a2': 0.0,
-        #     'a3': 0.0,
-        #     'a4': 0.0,
-        #     'a5': 0.0,
-        #     'a6': 0.0,
-        #     'a7': 0.0,
-        #     'sx': 0.0,
-        #     'tx': 0.0,
-        #     'ty': 0.0,
-        #     'tz': 0.0,
-        #     'f': 0.0,
-        #     'Rt': np.random.rand(4, 4)
-        # }
-        
-        # # Insert your projected 2D coordinates here!
-        # projected_2D_coordinates = None
-        
+        print("required_parameters=", required_parameters)
         # #############################################
         # ### DO NOT CHANGE THE RETURN VARIABLES!!! ###
         # #############################################
-        # return projected_2D_coordinates, required_parameters
+        return projected_2D_coordinates, required_parameters
     
     def back_projection_3D(self, corner_list):
         #############################################################
         ### You can put all your code for back projection here!!! ###
         #############################################################
-        """
-        Use last Rt and intrinsics to back-project 2D->3D given known Z.
-        Returns estimated 3D coords (n,3) and optical center (3,)
-        """
-        if self._last_params is None:
+
+        #Use last Rt and intrinsics to back-project 2D->3D given known Z.
+        if self._last_params is None:#  Returns estimated 3D coords (n,3) and optical center (3,)
             raise RuntimeError("Run calibrate_2D first.")
         p = self._last_params
         R = p['Rt'][:3,:3]; t = p['Rt'][:3,3]
@@ -218,16 +188,12 @@ class TsaiCameraCalibrator():
             ])
             xy = np.linalg.lstsq(A, b, rcond=None)[0]
             Xw_est.append([xy[0], xy[1], Z_i])
-        optical_center = -R.T @ t
-        return np.array(Xw_est), optical_center
-        
-        
-        # # Insert your calculated values here!
-        # estimated_3D_coordinates_WRF = None
-        # optical_centre_WRF = None
-        
+        # Insert your calculated values here!
+        optical_center_WRF = -R.T @ t
+        stimated_3D_coordinates_WRF=np.array(Xw_est)
         # #############################################
         # ### DO NOT CHANGE THE RETURN VARIABLES!!! ###
         # #############################################
-        # return estimated_3D_coordinates_WRF, optical_centre_WRF
-    
+        return stimated_3D_coordinates_WRF, optical_center_WRF
+        
+        
